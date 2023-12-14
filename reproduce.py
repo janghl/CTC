@@ -146,7 +146,7 @@ class Reproduce:
                             f.flush()
                             binNumber += 1
                     elif message.startswith("begin"):
-                        args = [f"--cuda", f"--mode=dec", f"--save-path=receiver", f"--recon-level={binNumber-1}"]  
+                        args = [f"--cuda", f"--mode=dec", f"--save-path=receiver"]  
                         binNumber = 0
                         # _dec(args, self.net)
                         main(args, self.net)
@@ -155,6 +155,7 @@ class Reproduce:
                         self.clear_dir('receiver/recon')
                         f.write(f"decoded frame {frame_count} finished!\n")
                         f.flush()
+                pass
         pass
 
 
