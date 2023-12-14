@@ -143,7 +143,6 @@ class Reproduce:
                                 f.flush()
                             f.write(f"frame {frame_count} finished!\n")
                             f.flush()
-                            binNumber += 1
                     elif message.startswith("begin"):
                         args = [f"--cuda", f"--mode=dec", f"--save-path=receiver"]  
                         # _dec(args, self.net)
