@@ -1,6 +1,7 @@
 import time
 import cv2
 import socket
+from bar import Encapsulation
 import os
 import threading
 import argparse
@@ -99,6 +100,7 @@ class Reproduce:
                     fs.write(f"in frame {frame_count} I sent {bin_count} cipher texts out of 160! Ratio = {bin_count/160}\n")
                     fs.flush()
                     self.clear_dir('sender/bits')
+                Encapsulation()
         pass
     
     def receiver(self):
