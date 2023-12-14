@@ -12,10 +12,9 @@ import base64
 import shutil
 
 PORT = 8080
-WAIT_TIME = 1.5
 class Reproduce:
     def __init__(self, args):
-        self.debug=False
+        self.debug=True
         net = model_CTC(N=192).to("cuda")
         ckpt = torch.load("ctc.pt")["state_dict"]
         net.load_state_dict(ckpt)
@@ -26,7 +25,7 @@ class Reproduce:
         self.source = args.source
         self.dest = args.dest
         os.mkdir(self.dest) if not os.path.isdir(self.dest) else None
-        self.interval = args.interval/1000
+        self.interval = args.interval
         sender_thread = threading.Thread(target=self.sender)
         receiver_thread = threading.Thread(target=self.receiver)
         sender_thread.daemon = True
@@ -97,7 +96,6 @@ class Reproduce:
                             fs.write(f"sent file {binFile} with count {bin_count}!\n")
                             fs.flush()
                     s.sendall(self.padding("begin decode!".encode('utf-8')))
-                    time.sleep(WAIT_TIME*self.interval)
                     fs.write(f"in frame {frame_count} I sent {bin_count} cipher texts out of 160! Ratio = {bin_count/160}\n")
                     fs.flush()
                     self.clear_dir('sender/bits')
@@ -113,6 +111,7 @@ class Reproduce:
                 f.write('connected to sender!\n')
                 f.flush()
                 frame_count = 0
+                binNumber = 0
                 while True:
                     message = conn.recv(1024).decode('utf-8')
                     if self.debug:
@@ -145,8 +144,10 @@ class Reproduce:
                                 f.flush()
                             f.write(f"frame {frame_count} finished!\n")
                             f.flush()
+                            binNumber += 1
                     elif message.startswith("begin"):
-                        args = [f"--cuda", f"--mode=dec", f"--save-path=receiver"]  
+                        args = [f"--cuda", f"--mode=dec", f"--save-path=receiver", f"--recon-level={binNumber-1}"]  
+                        binNumber = 0
                         # _dec(args, self.net)
                         main(args, self.net)
                         shutil.copyfile("receiver/recon/q0160.png", f"receiver/frame_{frame_count}.png")
@@ -161,6 +162,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--source', help='source directory, e.g. video.mp4', default='video.mp4')
     parser.add_argument('-d', '--dest', help='output directory', default='receiver')
-    parser.add_argument('-t', '--interval', help='max time interval, e.g. 30ms', type=int, default=1000000)
+    parser.add_argument('-t', '--interval', help='max time interval, e.g. 30s', type=int, default=30)
     args = parser.parse_args()
     reproduce = Reproduce(args)
