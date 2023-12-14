@@ -111,7 +111,6 @@ class Reproduce:
                 f.write('connected to sender!\n')
                 f.flush()
                 frame_count = 0
-                binNumber = 0
                 while True:
                     message = conn.recv(1024).decode('utf-8')
                     if self.debug:
@@ -147,7 +146,6 @@ class Reproduce:
                             binNumber += 1
                     elif message.startswith("begin"):
                         args = [f"--cuda", f"--mode=dec", f"--save-path=receiver"]  
-                        binNumber = 0
                         # _dec(args, self.net)
                         main(args, self.net)
                         shutil.copyfile("receiver/recon/q0160.png", f"receiver/frame_{frame_count}.png")
@@ -155,7 +153,7 @@ class Reproduce:
                         self.clear_dir('receiver/recon')
                         f.write(f"decoded frame {frame_count} finished!\n")
                         f.flush()
-                pass
+                
         pass
 
 
