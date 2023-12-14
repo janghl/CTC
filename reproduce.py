@@ -7,7 +7,7 @@ import argparse
 import codec
 import torch
 from models import model_CTC
-from codec import _enc,_dec
+from test import main
 import base64
 import shutil
 
@@ -15,6 +15,7 @@ PORT = 8080
 WAIT_TIME = 1.5
 class Reproduce:
     def __init__(self, args):
+        self.debug=False
         net = model_CTC(N=192).to("cuda")
         ckpt = torch.load("ctc.pt")["state_dict"]
         net.load_state_dict(ckpt)
@@ -28,59 +29,78 @@ class Reproduce:
         self.interval = args.interval/1000
         sender_thread = threading.Thread(target=self.sender)
         receiver_thread = threading.Thread(target=self.receiver)
+        sender_thread.daemon = True
+        receiver_thread.daemon = True
         sender_thread.start()
         receiver_thread.start()
         sender_thread.join()
         receiver_thread.join()
         
-    def clear_dir(self, folder):
+    def clear_dir(self, folder, exception=None):
         if os.path.exists(folder):
             for content in os.listdir(folder):
-                if os.path.isfile(f'{folder}/{content}'):
+                if os.path.isfile(f'{folder}/{content}') and not content==exception:
                     os.remove(f'{folder}/{content}')
                     # print(f'{folder}/{content}')
                 elif os.path.isdir(f'{folder}/{content}'):
-                    self.clear_dir(self, os.path.join(folder, content))
-                    os.rmdir(folder)
+                    self.clear_dir(os.path.join(folder, content))
+                    os.rmdir(os.path.join(folder, content))
                     # print(folder)
         else:
             os.mkdir(folder)
+            
+    def padding(self, buffer, size=1024):
+        return buffer+" ".encode('utf-8')*(1024-len(buffer))
         
     def sender(self):
         self.clear_dir('sender')
-        with open('sender/log', 'w') as f:
+        with open('sender/log', 'w') as fs:
             video = cv2.VideoCapture(self.source)
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect(self.addr)
-                f.write('connected to receiver!')
+                fs.write('connected to receiver!\n')
+                fs.flush()
                 frame_count = 0
                 # for each frame
                 while True:         
                     startTime = time.time()
                     ret, frame = video.read()
                     frame_count += 1
+                    fs.write(f'load frame {frame_count}!\n')
+                    fs.flush()
                     bin_count = 0
                     # no more frames left
                     if not ret:             
-                        s.sendall("task finished!")
-                        f.write(f"task finished with frame = {frame_count}!")
+                        s.sendall(self.padding("task finished!".encode('utf-8')))
+                        fs.write(f"task finished with frame = {frame_count}!\n")
+                        fs.flush()
                         break
                     outputPath = os.path.join("sender", f'frame_{frame_count}.jpg')
                     cv2.imwrite(outputPath, frame)
                     args = [f"--input-file={outputPath}", "--cuda", f"--mode=enc", f"--save-path=sender"] 
-                    _enc(args, self.net)
-                    for binFile in os.listdir("sender/bits"):
+                    # _enc(args, self.net)
+                    main(args, self.net)
+                    for binFile in sorted(os.listdir("sender/bits")):
                         fileSize = os.path.getsize(f'sender/bits/{binFile}')
-                        block_count = fileSize//1024 if fileSize%1024==0 else fileSize//1024+1
-                        s.sendall(f"frame={frame_count},fname={binFile},bin_count={bin_count},block_count={block_count}".encode())
+                        s.sendall(self.padding(f"frame={frame_count},fname={binFile},bin_count={bin_count},fileSize={fileSize},".encode('utf-8')))
                         if time.time()<startTime+self.interval:
-                            with open(f'sender/bits/{binFile}', 'r') as b:
-                                s.sendall(b.read())
+                            with open(f'sender/bits/{binFile}', 'rb') as b:
+                                while fileSize>0:
+                                    if fileSize>1024:
+                                        s.send(b.read(1024))
+                                        fileSize -= 1024
+                                    else:
+                                        s.send(b.read(fileSize))
+                                        fileSize -= fileSize
                             bin_count += 1
-                    s.sendall("begin decode!".encode())
+                        if self.debug:
+                            fs.write(f"sent file {binFile} with count {bin_count}!\n")
+                            fs.flush()
+                    s.sendall(self.padding("begin decode!".encode('utf-8')))
                     time.sleep(WAIT_TIME*self.interval)
-                    f.write(f"in frame {frame_count} I sent {bin_count} cipher texts out of 160! Ratio = {bin_count/160}")
-                    self.clear_dir('sender')
+                    fs.write(f"in frame {frame_count} I sent {bin_count} cipher texts out of 160! Ratio = {bin_count/160}\n")
+                    fs.flush()
+                    self.clear_dir('sender/bits')
         pass
     
     def receiver(self):
@@ -90,29 +110,50 @@ class Reproduce:
                 s.bind(self.addr)
                 s.listen(10)
                 conn, address = s.accept()
-                f.write('connected to sender!')
+                f.write('connected to sender!\n')
+                f.flush()
                 frame_count = 0
                 while True:
-                    message = conn.recv(1024).decode()
+                    message = conn.recv(1024).decode('utf-8')
+                    if self.debug:
+                        f.write("message: "+message+"\n")
+                        f.flush()
                     if message.startswith("task"):      # task finished
-                        f.write(f"task finished with frame = {frame_count}")
+                        f.write(f"task finished with frame = {frame_count}\n")
+                        f.flush()
                         break
                     elif message.startswith("frame"):
                         new_frame_count = message.split(',')[0].split('=')[1]
                         binFile = message.split(',')[1].split('=')[1]       # file name
                         bin_count = message.split(',')[2].split('=')[1]     # successfully sent bins
-                        block_count = message.split(',')[3].split('=')[1]   # socket transfer in blocks
+                        fileSize = message.split(',')[3].split('=')[1]   # socket transfer in blocks
+                        fileSize = int(fileSize)
+                        Size = int(fileSize)
                         if new_frame_count != frame_count:
                             self.clear_dir("receiver/bits")
                             frame_count = new_frame_count
-                        with open(binFile, "wb") as b:
-                            for iter in range(block_count):
-                                b.write(s.recv(1024))
-                            f.write(f"in frame {frame_count} file {binFile} I wrote {block_count} blocks")
+                        with open(os.path.join("receiver/bits", binFile), "wb") as b:
+                            while Size>0:
+                                if Size>1024:
+                                    b.write(conn.recv(1024))
+                                    Size -= 1024
+                                else:
+                                    b.write(conn.recv(Size))
+                                    Size -= Size
+                            if self.debug:
+                                f.write(f"in frame {frame_count} file {binFile} I wrote {fileSize} bytes\n")
+                                f.flush()
+                            f.write(f"frame {frame_count} finished!\n")
+                            f.flush()
                     elif message.startswith("begin"):
-                        args = [f"--cuda", f"--mode=dec", f"--save-path=receiver/bits"]  
-                        _dec(args, self.net)
-                        shutil.copyfile("receiver/bits/recon/q0160.png", os.path.join(self.dest, f"{frame_count}.png"))
+                        args = [f"--cuda", f"--mode=dec", f"--save-path=receiver"]  
+                        # _dec(args, self.net)
+                        main(args, self.net)
+                        shutil.copyfile("receiver/recon/q0160.png", f"receiver/frame_{frame_count}.png")
+                        self.clear_dir('receiver/bits')
+                        self.clear_dir('receiver/recon')
+                        f.write(f"decoded frame {frame_count} finished!\n")
+                        f.flush()
         pass
 
 
@@ -120,6 +161,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--source', help='source directory, e.g. video.mp4', default='video.mp4')
     parser.add_argument('-d', '--dest', help='output directory', default='receiver')
-    parser.add_argument('-t', '--interval', help='max time interval, e.g. 30ms', type=int, default=30)
+    parser.add_argument('-t', '--interval', help='max time interval, e.g. 30ms', type=int, default=1000000)
     args = parser.parse_args()
     reproduce = Reproduce(args)
