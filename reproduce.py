@@ -100,7 +100,7 @@ class Reproduce:
                     fs.write(f"in frame {frame_count} I sent {bin_count} cipher texts out of 160! Ratio = {bin_count/160}\n")
                     fs.flush()
                     self.clear_dir('sender/bits')
-                Encapsulation()
+                    s.recv(1024)
         pass
     
     def receiver(self):
@@ -143,8 +143,8 @@ class Reproduce:
                             if self.debug:
                                 f.write(f"in frame {frame_count} file {binFile} I wrote {fileSize} bytes\n")
                                 f.flush()
-                            f.write(f"frame {frame_count} finished!\n")
-                            f.flush()
+                            buffer = b' '*1024
+                            conn.send(buffer)
                     elif message.startswith("begin"):
                         args = [f"--cuda", f"--mode=dec", f"--save-path=receiver"]  
                         # _dec(args, self.net)
@@ -154,7 +154,7 @@ class Reproduce:
                         self.clear_dir('receiver/recon')
                         f.write(f"decoded frame {frame_count} finished!\n")
                         f.flush()
-                
+                Encapsulation()
         pass
 
 
