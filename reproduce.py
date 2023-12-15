@@ -101,7 +101,7 @@ class Reproduce:
                     fs.write(f"in frame {frame_count} I sent {bin_count} cipher texts out of 160! Ratio = {bin_count/160}\n")
                     fs.flush()
                     self.clear_dir('sender/bits')
-                    if s.recv(1024).decode().beginswith('success'):
+                    if s.recv(1024).decode().startswith('success'):
                         fs.write(f"receiver decode success\n")
                         fs.flush()
                         
@@ -117,7 +117,7 @@ class Reproduce:
                 f.write('connected to sender!\n')
                 f.flush()
                 frame_count = 0
-                while frame_count<int(self.max_frame):
+                while int(frame_count)<int(self.max_frame):
                     message = conn.recv(1024).decode('utf-8')
                     if self.debug:
                         f.write("message: "+message+"\n")
