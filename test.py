@@ -74,7 +74,7 @@ if __name__ == "__main__":
     net.load_state_dict(ckpt)
     net.update()
 
-    images_dir = "kodak"  # 图片目录路径
+    images_dir = "kodak"  # image directory
     total_enc_time = 0.0
     total_dec_time = 0.0
     total_target_size = 0.0
@@ -89,13 +89,13 @@ if __name__ == "__main__":
         image_path = os.path.join(images_dir, image_file)
         args = [f"--input-file={image_path}", "--cuda", f"--mode=enc", f"--save-path={target_path}"]  # 构造命令行参数
         enc_start_time = time.time()
-        main(args, net)  # 调用 main 函数进行编码
+        main(args, net)  # encode by calling main func
         enc_end_time = time.time()
         enc_time = enc_end_time - enc_start_time
 
         dec_start_time = time.time()
-        args[2] = f"--mode=dec"  # 修改参数为解码模式
-        main(args, net)  # 调用 main 函数进行解码
+        args[2] = f"--mode=dec"  # modify mode as decoding
+        main(args, net)  
         dec_end_time = time.time()
         dec_time = dec_end_time - dec_start_time
 
