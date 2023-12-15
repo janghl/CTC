@@ -24,7 +24,7 @@ class Reproduce:
         self.ip = socket.gethostbyname(socket.gethostname())
         self.addr = (self.ip, PORT)
         self.source = args.source
-        self.max_frame = args.source
+        self.max_frame = args.max_frame
         self.dest = args.dest
         os.mkdir(self.dest) if not os.path.isdir(self.dest) else None
         self.interval = args.interval
@@ -117,7 +117,7 @@ class Reproduce:
                 f.write('connected to sender!\n')
                 f.flush()
                 frame_count = 0
-                while frame_count<self.max_frame:
+                while frame_count<int(self.max_frame):
                     message = conn.recv(1024).decode('utf-8')
                     if self.debug:
                         f.write("message: "+message+"\n")
