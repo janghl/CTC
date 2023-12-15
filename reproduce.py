@@ -24,6 +24,7 @@ class Reproduce:
         self.ip = socket.gethostbyname(socket.gethostname())
         self.addr = (self.ip, PORT)
         self.source = args.source
+        self.max_frame = args.source
         self.dest = args.dest
         os.mkdir(self.dest) if not os.path.isdir(self.dest) else None
         self.interval = args.interval
@@ -100,7 +101,10 @@ class Reproduce:
                     fs.write(f"in frame {frame_count} I sent {bin_count} cipher texts out of 160! Ratio = {bin_count/160}\n")
                     fs.flush()
                     self.clear_dir('sender/bits')
-                    s.recv(1024)
+                    if s.recv(1024).decode().beginswith('success'):
+                        fs.write(f"receiver decode success\n")
+                        fs.flush()
+                        
         pass
     
     def receiver(self):
@@ -113,7 +117,7 @@ class Reproduce:
                 f.write('connected to sender!\n')
                 f.flush()
                 frame_count = 0
-                while True:
+                while frame_count<self.max_frame:
                     message = conn.recv(1024).decode('utf-8')
                     if self.debug:
                         f.write("message: "+message+"\n")
@@ -152,8 +156,10 @@ class Reproduce:
                         self.clear_dir('receiver/recon')
                         f.write(f"decoded frame {frame_count} finished!\n")
                         f.flush()
-                    buffer = b' '*1024
-                    conn.send(buffer)
+                        conn.send(self.padding("success".encode()))
+                        f.write(f"decode success\n")
+                        f.flush()
+                    
                 Encapsulation()
         pass
 
@@ -163,5 +169,6 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--source', help='source directory, e.g. video.mp4', default='video.mp4')
     parser.add_argument('-d', '--dest', help='output directory', default='receiver')
     parser.add_argument('-t', '--interval', help='max time interval, e.g. 30s', type=int, default=30)
+    parser.add_argument('-m', '--max_frame', help='trancate video frames, e.g. 10', type=int, default=10)
     args = parser.parse_args()
     reproduce = Reproduce(args)
