@@ -143,8 +143,6 @@ class Reproduce:
                             if self.debug:
                                 f.write(f"in frame {frame_count} file {binFile} I wrote {fileSize} bytes\n")
                                 f.flush()
-                            buffer = b' '*1024
-                            conn.send(buffer)
                     elif message.startswith("begin"):
                         args = [f"--cuda", f"--mode=dec", f"--save-path=receiver"]  
                         # _dec(args, self.net)
@@ -154,6 +152,8 @@ class Reproduce:
                         self.clear_dir('receiver/recon')
                         f.write(f"decoded frame {frame_count} finished!\n")
                         f.flush()
+                    buffer = b' '*1024
+                    conn.send(buffer)
                 Encapsulation()
         pass
 
